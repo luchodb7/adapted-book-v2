@@ -1,0 +1,573 @@
+// =============================================================================
+// ADAPTED BOOKS - PRISMA SCHEMA
+// Multi-tenant, accessibility-first SaaS platform.
+// All tenant-scoped data MUST include `organizationId` and respect tenant guards.
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum StoryStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum StoryVisibility {
+  PRIVATE
+  ORGANIZATION
+  PUBLIC
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  INVITE
+  EXPORT
+  AI_GENERATE
+  PERMISSION_CHANGE
+}
+
+enum AIProviderKind {
+  MOCK
+  OPENAI
+  ANTHROPIC
+  GEMINI
+  AZURE_OPENAI
+  OLLAMA
+  LMSTUDIO
+}
+
+enum AIGenerationKind {
+  STORY
+  ADAPT_TEXT
+  SIMPLIFY_TEXT
+  SUGGEST_PICTOGRAMS
+  ROUTINE
+  VISUAL_SCHEDULE
+  COMPREHENSION_QUESTIONS
+}
+
+enum AIGenerationStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum UsageMetric {
+  STORIES_CREATED
+  AI_GENERATIONS
+  PDF_EXPORTS
+  PICTOGRAM_LOOKUPS
+  STORAGE_BYTES
+}
+
+enum CreditTransactionKind {
+  GRANT
+  CONSUME
+  REFUND
+  EXPIRE
+  PURCHASE
+}
+
+// =============================================================================
+// AUTH (Auth.js v5 / NextAuth)
+// =============================================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// =============================================================================
+// USERS
+// =============================================================================
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  emailVerified   DateTime?
+  hashedPassword  String?
+  name            String?
+  image           String?
+  locale          String    @default("en")
+  timezone        String    @default("UTC")
+  preferences     Json      @default("{}")
+  lastLoginAt     DateTime?
+  failedLoginAttempts Int   @default(0)
+  lockedUntil     DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  accounts       Account[]
+  sessions       Session[]
+  memberships    Membership[]
+  storiesCreated Story[]          @relation("StoryCreator")
+  auditLogs      AuditLog[]
+  aiGenerations  AIGeneration[]
+  invitesSent    Invitation[]     @relation("InviteSender")
+
+  @@index([deletedAt])
+  @@map("users")
+}
+
+// =============================================================================
+// ORGANIZATIONS (Tenants)
+// =============================================================================
+
+model Organization {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  logoUrl     String?
+  description String?
+  website     String?
+  locale      String  @default("en")
+  timezone    String  @default("UTC")
+  settings    Json    @default("{}")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  memberships         Membership[]
+  invitations         Invitation[]
+  stories             Story[]
+  auditLogs           AuditLog[]
+  featureFlags        FeatureFlag[]
+  promptTemplates     PromptTemplate[]
+  aiGenerations       AIGeneration[]
+  subscription        OrganizationSubscription?
+  usageRecords        UsageRecord[]
+  creditTransactions  CreditTransaction[]
+
+  @@index([slug])
+  @@index([deletedAt])
+  @@map("organizations")
+}
+
+model Membership {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role             @default(VIEWER)
+  status         MembershipStatus @default(ACTIVE)
+  joinedAt       DateTime         @default(now())
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id             String   @id @default(cuid())
+  email          String
+  organizationId String
+  role           Role     @default(VIEWER)
+  token          String   @unique
+  invitedById    String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("InviteSender", fields: [invitedById], references: [id])
+
+  @@unique([email, organizationId])
+  @@index([organizationId])
+  @@index([token])
+  @@map("invitations")
+}
+
+// =============================================================================
+// STORIES (Core Feature)
+// =============================================================================
+
+model Story {
+  id             String          @id @default(cuid())
+  organizationId String
+  createdById    String
+  title          String
+  slug           String?
+  description    String?
+  originalText   String          @db.Text
+  adaptedText    String?         @db.Text
+  language       String          @default("en")
+  status         StoryStatus     @default(DRAFT)
+  visibility     StoryVisibility @default(ORGANIZATION)
+  coverImageUrl  String?
+  tags           String[]        @default([])
+  metadata       Json            @default("{}")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("StoryCreator", fields: [createdById], references: [id])
+  pages        StoryPage[]
+  exports      StoryExport[]
+  aiGenerations AIGeneration[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([createdById])
+  @@index([deletedAt])
+  @@unique([organizationId, slug])
+  @@map("stories")
+}
+
+model StoryPage {
+  id                String  @id @default(cuid())
+  storyId           String
+  order             Int
+  text              String  @db.Text
+  pictogramUrl      String?
+  pictogramKeyword  String?
+  pictogramId       String?
+  backgroundColor   String?
+  textColor         String?
+  fontSize          Int?
+  layout            String  @default("text-top")
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, order])
+  @@index([storyId])
+  @@map("story_pages")
+}
+
+model StoryExport {
+  id             String   @id @default(cuid())
+  storyId        String
+  format         String
+  url            String?
+  sizeBytes      Int?
+  generatedById  String?
+  createdAt      DateTime @default(now())
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@index([storyId])
+  @@map("story_exports")
+}
+
+// =============================================================================
+// AUDIT LOG
+// =============================================================================
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  organizationId String?
+  userId         String?
+  action         AuditAction
+  resource       String
+  resourceId     String?
+  ipAddress      String?
+  userAgent      String?
+  metadata       Json        @default("{}")
+  createdAt      DateTime    @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// =============================================================================
+// FEATURE FLAGS
+// =============================================================================
+
+model FeatureFlag {
+  id             String   @id @default(cuid())
+  organizationId String?
+  key            String
+  enabled        Boolean  @default(false)
+  description    String?
+  metadata       Json     @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@index([key])
+  @@map("feature_flags")
+}
+
+// =============================================================================
+// AI - PROMPT MANAGEMENT
+// =============================================================================
+
+model PromptTemplate {
+  id             String  @id @default(cuid())
+  organizationId String?
+  key            String
+  name           String
+  description    String?
+  category       String
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions     PromptVersion[]
+  executions   PromptExecution[]
+
+  @@unique([organizationId, key])
+  @@index([category])
+  @@map("prompt_templates")
+}
+
+model PromptVersion {
+  id            String  @id @default(cuid())
+  templateId    String
+  version       Int
+  systemPrompt  String  @db.Text
+  userPrompt    String  @db.Text
+  variables     Json    @default("[]")
+  model         String?
+  temperature   Float?
+  maxTokens     Int?
+  isActive      Boolean @default(false)
+  createdAt     DateTime @default(now())
+
+  template   PromptTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  executions PromptExecution[]
+
+  @@unique([templateId, version])
+  @@index([templateId])
+  @@map("prompt_versions")
+}
+
+model PromptExecution {
+  id             String   @id @default(cuid())
+  templateId     String
+  versionId      String
+  variables      Json     @default("{}")
+  renderedPrompt String   @db.Text
+  createdAt      DateTime @default(now())
+
+  template PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version  PromptVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+  @@map("prompt_executions")
+}
+
+// =============================================================================
+// AI - GENERATIONS (audit log for every AI invocation)
+// =============================================================================
+
+model AIGeneration {
+  id             String             @id @default(cuid())
+  organizationId String
+  userId         String?
+  storyId        String?
+  kind           AIGenerationKind
+  provider       AIProviderKind
+  model          String
+  status         AIGenerationStatus @default(PENDING)
+  prompt         String             @db.Text
+  response       String?            @db.Text
+  promptTokens   Int?
+  completionTokens Int?
+  tokensUsed     Int?
+  costUsd        Decimal?           @db.Decimal(12, 6)
+  latencyMs      Int?
+  errorMessage   String?
+  metadata       Json               @default("{}")
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  story        Story?       @relation(fields: [storyId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId])
+  @@index([provider, model])
+  @@index([kind])
+  @@map("ai_generations")
+}
+
+// =============================================================================
+// SUBSCRIPTIONS & BILLING
+// =============================================================================
+
+model SubscriptionPlan {
+  id              String          @id @default(cuid())
+  key             String          @unique
+  name            String
+  description     String?
+  priceMonthlyUsd Decimal         @db.Decimal(10, 2)
+  priceYearlyUsd  Decimal         @db.Decimal(10, 2)
+  features        Json            @default("{}")
+  limits          Json            @default("{}")
+  isActive        Boolean         @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationSubscriptions OrganizationSubscription[]
+
+  @@map("subscription_plans")
+}
+
+model OrganizationSubscription {
+  id                 String             @id @default(cuid())
+  organizationId     String             @unique
+  planId             String
+  status             SubscriptionStatus @default(TRIALING)
+  billingInterval    BillingInterval    @default(MONTHLY)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean            @default(false)
+  canceledAt         DateTime?
+  trialEndsAt        DateTime?
+  externalCustomerId String?
+  externalSubscriptionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([status])
+  @@map("organization_subscriptions")
+}
+
+model UsageRecord {
+  id             String      @id @default(cuid())
+  organizationId String
+  metric         UsageMetric
+  quantity       Int         @default(1)
+  periodStart    DateTime
+  periodEnd      DateTime
+  metadata       Json        @default("{}")
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, metric, periodStart])
+  @@map("usage_records")
+}
+
+model CreditTransaction {
+  id             String                @id @default(cuid())
+  organizationId String
+  kind           CreditTransactionKind
+  amount         Int
+  balanceAfter   Int
+  reason         String?
+  metadata       Json                  @default("{}")
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("credit_transactions")
+}

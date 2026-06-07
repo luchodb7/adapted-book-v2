@@ -1,0 +1,62 @@
+name: adapted-books
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: adapted-books:latest
+    container_name: adapted-books-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: postgresql://adapted:adapted@db:5432/adapted?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - adapted-net
+
+  db:
+    image: postgres:16-alpine
+    container_name: adapted-books-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: adapted
+      POSTGRES_PASSWORD: adapted
+      POSTGRES_DB: adapted
+    ports:
+      - "5432:5432"
+    volumes:
+      - adapted_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adapted -d adapted"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - adapted-net
+
+networks:
+  adapted-net:
+    driver: bridge
+
+volumes:
+  adapted_pg_data:
+    driver: local
