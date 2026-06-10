@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { nanoid } from "nanoid";
-import { ArrowDown, ArrowUp, FileDown, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, FileDown, ImagePlus, Plus, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,13 +13,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils/cn";
 import { updateStoryAction } from "@/modules/stories/presentation/server-actions/story-actions";
 
+export interface EditorPictogram {
+  id: string;
+  order: number;
+  pictogramUrl: string;
+  pictogramKeyword: string | null;
+  pictogramId: string | null;
+}
+
 export interface EditorPage {
   id: string;
   order: number;
   text: string;
-  pictogramUrl: string | null;
-  pictogramKeyword: string | null;
-  pictogramId: string | null;
+  pictograms: EditorPictogram[];
   backgroundColor: string | null;
   textColor: string | null;
   fontSize: number | null;
@@ -34,17 +40,6 @@ export interface StoryEditorProps {
   initialStatus: "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED";
 }
 
-/**
- * Lightweight Canva-style social-story editor.
- *
- * Three-panel layout:
- *   - left:  page list (drag-to-reorder via arrow buttons, accessible)
- *   - center: live preview of the selected page
- *   - right: page properties (text, pictogram, layout, colors)
- *
- * State is kept entirely client-side and persisted via a Server Action when
- * the user clicks "Save". Optimistic UI with toast feedback.
- */
 export function StoryEditor({ storyId, initialTitle, initialPages, initialStatus }: StoryEditorProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -80,10 +75,8 @@ export function StoryEditor({ storyId, initialTitle, initialPages, initialStatus
       {
         id,
         order: prev.length,
-        text: "New page text…",
-        pictogramUrl: null,
-        pictogramKeyword: null,
-        pictogramId: null,
+        text: "New page text\u2026",
+        pictograms: [],
         backgroundColor: null,
         textColor: null,
         fontSize: null,
@@ -102,6 +95,39 @@ export function StoryEditor({ storyId, initialTitle, initialPages, initialStatus
     setDirty(true);
   };
 
+  const addPictogram = () => {
+    if (!selectedId) return;
+    const picId = `pic_${nanoid(8)}`;
+    updatePage(selectedId, {
+      pictograms: [
+        ...(selected?.pictograms ?? []),
+        {
+          id: picId,
+          order: (selected?.pictograms.length ?? 0),
+          pictogramUrl: "",
+          pictogramKeyword: null,
+          pictogramId: null,
+        },
+      ],
+    });
+  };
+
+  const updatePictogram = (picId: string, patch: Partial<EditorPictogram>) => {
+    if (!selectedId) return;
+    const current = selected?.pictograms ?? [];
+    updatePage(selectedId, {
+      pictograms: current.map((pic) => (pic.id === picId ? { ...pic, ...patch } : pic)),
+    });
+  };
+
+  const removePictogram = (picId: string) => {
+    if (!selectedId) return;
+    const current = selected?.pictograms ?? [];
+    updatePage(selectedId, {
+      pictograms: current.filter((pic) => pic.id !== picId),
+    });
+  };
+
   const save = () => {
     startTransition(async () => {
       const result = await updateStoryAction({
@@ -112,9 +138,13 @@ export function StoryEditor({ storyId, initialTitle, initialPages, initialStatus
           id: p.id,
           order: p.order,
           text: p.text,
-          pictogramUrl: p.pictogramUrl,
-          pictogramKeyword: p.pictogramKeyword,
-          pictogramId: p.pictogramId,
+          pictograms: p.pictograms.map((pic) => ({
+            id: pic.id,
+            order: pic.order,
+            pictogramUrl: pic.pictogramUrl,
+            pictogramKeyword: pic.pictogramKeyword,
+            pictogramId: pic.pictogramId,
+          })),
           backgroundColor: p.backgroundColor,
           textColor: p.textColor,
           fontSize: p.fontSize,
@@ -179,7 +209,7 @@ export function StoryEditor({ storyId, initialTitle, initialPages, initialStatus
         </div>
       </header>
 
-      <div className="grid min-h-0 grow grid-cols-1 gap-3 md:grid-cols-[240px_minmax(0,1fr)_320px]">
+      <div className="grid min-h-0 grow grid-cols-1 gap-3 md:grid-cols-[240px_minmax(0,1fr)_340px]">
         {/* Pages panel */}
         <section
           aria-labelledby="pages-panel"
@@ -271,34 +301,55 @@ export function StoryEditor({ storyId, initialTitle, initialPages, initialStatus
                 <Textarea
                   id="page-text"
                   value={selected.text}
-                  rows={5}
+                  rows={4}
                   maxLength={2000}
                   onChange={(e) => updatePage(selected.id, { text: e.target.value })}
                 />
               </div>
+
+              {/* Multiple pictograms */}
               <div className="space-y-2">
-                <Label htmlFor="page-pictogram">Pictogram keyword</Label>
-                <Input
-                  id="page-pictogram"
-                  value={selected.pictogramKeyword ?? ""}
-                  placeholder="e.g. happy"
-                  onChange={(e) =>
-                    updatePage(selected.id, { pictogramKeyword: e.target.value || null })
-                  }
-                />
-                <Input
-                  id="page-pictogram-url"
-                  value={selected.pictogramUrl ?? ""}
-                  placeholder="https://…image.png"
-                  onChange={(e) =>
-                    updatePage(selected.id, { pictogramUrl: e.target.value || null })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Tip: use the keyword search in the right panel (coming soon) to pick a
-                  pictogram from ARASAAC.
-                </p>
+                <div className="flex items-center justify-between">
+                  <Label>Pictograms</Label>
+                  <Button variant="ghost" size="sm" onClick={addPictogram} aria-label="Add pictogram">
+                    <ImagePlus className="size-4" />
+                  </Button>
+                </div>
+                {selected.pictograms.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No pictograms yet. Click + to add one.</p>
+                )}
+                <div className="space-y-2">
+                  {selected.pictograms.map((pic) => (
+                    <div key={pic.id} className="flex flex-col gap-1 rounded-md border p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">#{pic.order + 1}</span>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-5"
+                          aria-label="Remove pictogram"
+                          onClick={() => removePictogram(pic.id)}
+                        >
+                          <X className="size-3" />
+                        </Button>
+                      </div>
+                      <Input
+                        value={pic.pictogramKeyword ?? ""}
+                        placeholder="Keyword (e.g. happy)"
+                        className="h-8 text-xs"
+                        onChange={(e) => updatePictogram(pic.id, { pictogramKeyword: e.target.value || null })}
+                      />
+                      <Input
+                        value={pic.pictogramUrl}
+                        placeholder="https://\u2026image.png"
+                        className="h-8 text-xs"
+                        onChange={(e) => updatePictogram(pic.id, { pictogramUrl: e.target.value })}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="page-layout">Layout</Label>
                 <select
@@ -365,41 +416,94 @@ function PagePreview({ page }: { page: EditorPage }) {
     fontSize: page.fontSize ? `${page.fontSize}px` : undefined,
   };
   const layout = page.layout;
+  const images = page.pictograms.filter((p) => p.pictogramUrl);
+
+  if (layout === "pictogram-only") {
+    return (
+      <article
+        style={style}
+        className="flex aspect-[3/4] w-full max-w-md flex-col items-center justify-center gap-3 rounded-lg border bg-white p-6 shadow-md"
+        aria-label="Page preview"
+      >
+        {images.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {images.map((pic) => (
+              <PictogramImg key={pic.id} src={pic.pictogramUrl} alt={pic.pictogramKeyword ?? "Pictogram"} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No pictograms</p>
+        )}
+      </article>
+    );
+  }
+
+  const showText = true;
+  const showImages = images.length > 0 && layout !== "text-only";
+
+  if (layout === "text-left" || layout === "text-right") {
+    return (
+      <article
+        style={style}
+        className={cn(
+          "flex aspect-[3/4] w-full max-w-md rounded-lg border bg-white p-4 shadow-md",
+          layout === "text-left" ? "flex-row" : "flex-row-reverse",
+        )}
+        aria-label="Page preview"
+      >
+        {showText && (
+          <p className="flex-1 overflow-y-auto px-2 text-center text-sm font-medium leading-snug">
+            {page.text}
+          </p>
+        )}
+        {showImages && (
+          <div className="flex w-1/3 flex-col items-center justify-center gap-2">
+            {images.map((pic) => (
+              <PictogramImg key={pic.id} src={pic.pictogramUrl} alt={pic.pictogramKeyword ?? "Pictogram"} className="max-h-24" />
+            ))}
+          </div>
+        )}
+      </article>
+    );
+  }
 
   return (
     <article
       style={style}
-      className={cn(
-        "flex aspect-[3/4] w-full max-w-md flex-col rounded-lg border bg-white p-6 text-center shadow-md",
-        (layout === "text-left" || layout === "text-right") && "flex-row items-center",
-      )}
+      className="flex aspect-[3/4] w-full max-w-md flex-col rounded-lg border bg-white p-6 text-center shadow-md"
       aria-label="Page preview"
     >
-      {page.pictogramUrl && layout !== "text-only" && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={page.pictogramUrl}
-          alt={page.pictogramKeyword ?? "Pictogram"}
-          className={cn(
-            "object-contain",
-            layout === "text-bottom" && "mx-auto mb-4 h-48 w-auto",
-            layout === "text-top" && "order-2 mx-auto mt-4 h-48 w-auto",
-            layout === "text-left" && "order-2 h-32 w-32",
-            layout === "text-right" && "order-1 h-32 w-32",
-            layout === "pictogram-only" && "mx-auto my-auto h-72 w-auto",
-          )}
-        />
+      {showImages && layout !== "text-top" && (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {images.map((pic) => (
+            <PictogramImg key={pic.id} src={pic.pictogramUrl} alt={pic.pictogramKeyword ?? "Pictogram"} />
+          ))}
+        </div>
       )}
-      {layout !== "pictogram-only" && (
-        <p
-          className={cn(
-            "grow font-medium leading-snug",
-            (layout === "text-left" || layout === "text-right") && "px-4",
-          )}
-        >
-          {page.text}
-        </p>
+      {showText && (
+        <p className="grow overflow-y-auto font-medium leading-snug">{page.text}</p>
+      )}
+      {showImages && layout === "text-top" && (
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+          {images.map((pic) => (
+            <PictogramImg key={pic.id} src={pic.pictogramUrl} alt={pic.pictogramKeyword ?? "Pictogram"} />
+          ))}
+        </div>
       )}
     </article>
+  );
+}
+
+function PictogramImg({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [error, setError] = React.useState(false);
+  if (error) return <span className="text-xs text-muted-foreground">{alt}</span>;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setError(true)}
+      className={cn("size-16 object-contain", className)}
+    />
   );
 }

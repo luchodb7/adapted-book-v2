@@ -26,7 +26,7 @@ export async function createStoryAction(
 ): Promise<ActionResult<{ storyId: string }>> {
   try {
     const ctx = await requireRole("EDITOR");
-    const limit = await rateLimit({ key: `stories.create:${ctx.organizationId}`, kind: "default" });
+    const limit = await rateLimit({ key: `stories.create:${ctx.userId}`, kind: "default" });
     if (!limit.allowed) return errorResult("Too many requests, please slow down.") as unknown as ActionResult<{ storyId: string }>;
 
     const c = getContainer();

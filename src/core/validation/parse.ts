@@ -1,5 +1,4 @@
 import { z } from "zod";
-import DOMPurify from "isomorphic-dompurify";
 import { ValidationError } from "@/core/errors/app-error";
 
 /**
@@ -19,8 +18,14 @@ export function parseInput<T>(schema: z.ZodType<T>, input: unknown): T {
   return result.data;
 }
 
-export function sanitizeHtml(dirty: string): string {
-  return DOMPurify.sanitize(dirty, {
+let _purify: ((dirty: string, config?: Record<string, unknown>) => string) | null = null;
+
+export async function sanitizeHtml(dirty: string): Promise<string> {
+  if (!_purify) {
+    const mod = await import("isomorphic-dompurify");
+    _purify = (mod.default ?? mod) as unknown as (dirty: string, config?: Record<string, unknown>) => string;
+  }
+  return _purify(dirty, {
     ALLOWED_TAGS: ["b", "i", "em", "strong", "p", "br", "ul", "ol", "li"],
     ALLOWED_ATTR: [],
   });

@@ -15,7 +15,9 @@ declare module "next-auth" {
       email: string;
       name?: string | null;
       image?: string | null;
+      locale?: string | null;
       activeOrganizationId?: string | null;
+      role?: string | null;
     } & DefaultSession["user"];
   }
 }
@@ -120,8 +122,10 @@ export const authConfig: NextAuthConfig = {
         const firstMembership = await prisma.membership.findFirst({
           where: { userId: user.id, status: "ACTIVE", deletedAt: null },
           orderBy: { joinedAt: "asc" },
+          select: { organizationId: true, role: true },
         });
         token.activeOrganizationId = firstMembership?.organizationId ?? null;
+        token.role = firstMembership?.role ?? null;
       }
 
       if (trigger === "update" && session?.activeOrganizationId) {
@@ -132,9 +136,11 @@ export const authConfig: NextAuthConfig = {
             status: "ACTIVE",
             deletedAt: null,
           },
+          select: { role: true },
         });
         if (membership) {
           token.activeOrganizationId = session.activeOrganizationId;
+          token.role = membership.role;
         }
       }
 
@@ -144,6 +150,8 @@ export const authConfig: NextAuthConfig = {
       if (token.sub) session.user.id = token.sub;
       session.user.activeOrganizationId =
         (token.activeOrganizationId as string | null | undefined) ?? null;
+      session.user.role =
+        (token.role as string | null | undefined) ?? null;
       return session;
     },
     authorized({ auth, request }) {

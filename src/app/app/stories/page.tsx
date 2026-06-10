@@ -29,6 +29,7 @@ export default async function StoriesPage({ searchParams }: PageProps) {
         : undefined,
     limit,
     offset,
+    loadPages: false,
   });
 
   const totalPages = Math.max(1, Math.ceil(result.total / limit));
@@ -89,13 +90,13 @@ export default async function StoriesPage({ searchParams }: PageProps) {
 
       <StoriesTable
         items={result.items.map((s) => {
-          const d = s.toJSON();
+          const json = s.toJSON();
           return {
-            id: d.id,
-            title: d.title,
-            status: d.status,
-            pages: d.pages.map((p) => p.toJSON()),
-            updatedAt: d.updatedAt,
+            id: json.id,
+            title: json.title,
+            status: json.status,
+            pages: json.pages as unknown[],
+            updatedAt: json.updatedAt instanceof Date ? json.updatedAt.toISOString() : json.updatedAt,
           };
         })}
       />

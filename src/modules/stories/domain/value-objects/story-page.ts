@@ -1,12 +1,11 @@
 import { ValueObject } from "@/shared/domain/base";
+import { PagePictogram, type PagePictogramProps } from "./page-pictogram";
 
 export interface StoryPageProps {
   readonly id: string;
   readonly order: number;
   text: string;
-  pictogramUrl: string | null;
-  pictogramKeyword: string | null;
-  pictogramId: string | null;
+  pictograms: PagePictogram[];
   backgroundColor: string | null;
   textColor: string | null;
   fontSize: number | null;
@@ -17,7 +16,7 @@ export interface StoryPageProps {
 export type PageLayout = "text-top" | "text-bottom" | "text-left" | "text-right" | "text-only" | "pictogram-only";
 
 export class StoryPage extends ValueObject<StoryPageProps> {
-  static create(input: Omit<StoryPageProps, "layout"> & { layout?: PageLayout }): StoryPage {
+  static create(input: Omit<StoryPageProps, "layout" | "pictograms"> & { layout?: PageLayout; pictograms?: PagePictogram[] }): StoryPage {
     if (input.text.length > 2000) {
       throw new Error("Page text cannot exceed 2000 characters");
     }
@@ -26,6 +25,7 @@ export class StoryPage extends ValueObject<StoryPageProps> {
     }
     return new StoryPage({
       ...input,
+      pictograms: input.pictograms ?? [],
       layout: input.layout ?? "text-top",
     });
   }
@@ -33,20 +33,31 @@ export class StoryPage extends ValueObject<StoryPageProps> {
   get id() { return this.props.id; }
   get order() { return this.props.order; }
   get text() { return this.props.text; }
-  get pictogramUrl() { return this.props.pictogramUrl; }
-  get pictogramKeyword() { return this.props.pictogramKeyword; }
+  get pictograms(): readonly PagePictogram[] { return this.props.pictograms; }
   get layout() { return this.props.layout; }
 
   withText(text: string): StoryPage {
     return StoryPage.create({ ...this.props, text });
   }
 
-  withPictogram(input: { url: string | null; keyword: string | null; id: string | null }): StoryPage {
+  addPictogram(pictogram: PagePictogram): StoryPage {
     return StoryPage.create({
       ...this.props,
-      pictogramUrl: input.url,
-      pictogramKeyword: input.keyword,
-      pictogramId: input.id,
+      pictograms: [...this.props.pictograms, pictogram],
+    });
+  }
+
+  removePictogram(pictogramId: string): StoryPage {
+    return StoryPage.create({
+      ...this.props,
+      pictograms: this.props.pictograms.filter((p) => p.id !== pictogramId),
+    });
+  }
+
+  replacePictograms(pictograms: PagePictogram[]): StoryPage {
+    return StoryPage.create({
+      ...this.props,
+      pictograms: [...pictograms].sort((a, b) => a.order - b.order),
     });
   }
 
@@ -55,6 +66,16 @@ export class StoryPage extends ValueObject<StoryPageProps> {
   }
 
   toJSON(): StoryPageProps {
-    return { ...this.props };
+    return {
+      id: this.props.id,
+      order: this.props.order,
+      text: this.props.text,
+      pictograms: this.props.pictograms.map((p) => p.toJSON()) as unknown as PagePictogram[],
+      backgroundColor: this.props.backgroundColor,
+      textColor: this.props.textColor,
+      fontSize: this.props.fontSize,
+      layout: this.props.layout,
+      notes: this.props.notes,
+    };
   }
 }

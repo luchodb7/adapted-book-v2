@@ -7,6 +7,7 @@ import {
   type SocialStoryGenerator,
 } from "@/modules/stories/domain/services/social-story-generator";
 import { StoryPage } from "@/modules/stories/domain/value-objects/story-page";
+import { PagePictogram } from "@/modules/stories/domain/value-objects/page-pictogram";
 import { extractKeywords, splitIntoSentences, simplifySentence } from "./text-processing";
 
 const DEFAULT_SENTENCES_PER_PAGE = 1;
@@ -69,13 +70,15 @@ export class DefaultSocialStoryGenerator implements SocialStoryGenerator {
           }
         }
 
+        const pictograms = pictogramUrl && keyword
+          ? [PagePictogram.create({ id: `${input.storyId}-page-${index}-pic-0`, order: 0, pictogramUrl, pictogramKeyword: keyword, pictogramId })]
+          : [];
+
         return StoryPage.create({
           id: `${input.storyId}-page-${index}`,
           order: index,
           text,
-          pictogramUrl,
-          pictogramKeyword: keyword,
-          pictogramId,
+          pictograms,
           backgroundColor: null,
           textColor: null,
           fontSize: null,
@@ -95,15 +98,16 @@ export class DefaultSocialStoryGenerator implements SocialStoryGenerator {
     const language = story.toJSON().language;
     return Promise.all(
       story.pages.map(async (page) => {
-        const keyword = page.pictogramKeyword ?? extractKeywords(page.text, language)[0] ?? null;
-        if (!keyword) return page;
-        const result = await this.pictograms.findBestForKeyword(keyword, { language });
-        if (!result) return page;
-        return page.withPictogram({
-          url: result.imageUrl,
-          keyword,
-          id: String(result.id),
-        });
+        const pictograms = await Promise.all(
+          page.pictograms.map(async (pic) => {
+            const keyword = pic.pictogramKeyword ?? extractKeywords(page.text, language)[0] ?? null;
+            if (!keyword) return pic;
+            const result = await this.pictograms.findBestForKeyword(keyword, { language });
+            if (!result) return pic;
+            return pic.withUrl(result.imageUrl);
+          }),
+        );
+        return page.replacePictograms(pictograms as typeof page.pictograms extends readonly (infer U)[] ? U[] : never[]);
       }),
     );
   }

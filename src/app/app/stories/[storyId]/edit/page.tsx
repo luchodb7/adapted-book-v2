@@ -23,22 +23,23 @@ export default async function EditStoryPage({ params }: PageProps) {
       storyId={story.id}
       initialTitle={data.title}
       initialStatus={data.status}
-      initialPages={data.pages.map((p) => {
-        const pj = p.toJSON();
-        return {
-          id: pj.id,
-          order: pj.order,
-          text: pj.text,
-          pictogramUrl: pj.pictogramUrl,
-          pictogramKeyword: pj.pictogramKeyword,
-          pictogramId: pj.pictogramId,
-          backgroundColor: pj.backgroundColor,
-          textColor: pj.textColor,
-          fontSize: pj.fontSize,
-          layout: pj.layout,
-          notes: pj.notes,
-        };
-      })}
+      initialPages={data.pages.map((p) => ({
+        id: p.id,
+        order: p.order,
+        text: p.text,
+        pictograms: p.pictograms.map((pic) => ({
+          id: pic.id,
+          order: pic.order,
+          pictogramUrl: pic.pictogramUrl,
+          pictogramKeyword: pic.pictogramKeyword ?? null,
+          pictogramId: pic.pictogramId ?? null,
+        })),
+        backgroundColor: p.backgroundColor,
+        textColor: p.textColor,
+        fontSize: p.fontSize,
+        layout: p.layout,
+        notes: p.notes,
+      }))}
     />
   );
 }

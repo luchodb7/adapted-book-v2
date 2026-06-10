@@ -21,8 +21,11 @@ export class ZIPExporter {
           pages: story.pages.map((p) => ({
             order: p.order,
             text: p.text,
-            pictogramUrl: p.pictogramUrl,
-            pictogramKeyword: p.pictogramKeyword,
+            pictograms: p.pictograms.map((pic) => ({
+              order: pic.order,
+              pictogramUrl: pic.pictogramUrl,
+              pictogramKeyword: pic.pictogramKeyword,
+            })),
           })),
         },
         null,
@@ -34,15 +37,17 @@ export class ZIPExporter {
     for (const page of story.pages) {
       const idx = String(page.order + 1).padStart(3, "0");
       pagesDir.file(`${idx}.txt`, page.text);
-      if (page.pictogramUrl) {
-        try {
-          const res = await fetch(page.pictogramUrl);
-          if (res.ok) {
-            const ext = page.pictogramUrl.toLowerCase().endsWith(".jpg") ? "jpg" : "png";
-            pagesDir.file(`${idx}.${ext}`, await res.arrayBuffer());
+      for (const pic of page.pictograms) {
+        if (pic.pictogramUrl) {
+          try {
+            const res = await fetch(pic.pictogramUrl);
+            if (res.ok) {
+              const ext = pic.pictogramUrl.toLowerCase().endsWith(".jpg") ? "jpg" : "png";
+              pagesDir.file(`${idx}_${pic.order}.${ext}`, await res.arrayBuffer());
+            }
+          } catch {
+            // Ignore — text file is enough; archive must still build.
           }
-        } catch {
-          // Ignore — text file is enough; archive must still build.
         }
       }
     }

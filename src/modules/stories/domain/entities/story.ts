@@ -1,6 +1,7 @@
 import { AggregateRoot } from "@/shared/domain/base";
 import type { StoryStatus, StoryVisibility } from "@prisma/client";
-import { StoryPage } from "../value-objects/story-page";
+import { StoryPage, type StoryPageProps } from "../value-objects/story-page";
+import { PagePictogram, type PagePictogramProps } from "../value-objects/page-pictogram";
 
 export interface StoryProps {
   readonly id: string;
@@ -190,13 +191,17 @@ export class Story extends AggregateRoot {
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
-      pages: this.props.pages.map((p, idx) =>
-        StoryPage.create({
-          ...p.toJSON(),
+      pages: this.props.pages.map((p, idx) => {
+        const pj = p.toJSON();
+        return StoryPage.create({
+          ...pj,
+          pictograms: (pj.pictograms as unknown as PagePictogramProps[]).map((pic) =>
+            PagePictogram.create(pic),
+          ),
           id: `${newId}-page-${idx}`,
           order: idx,
-        }),
-      ),
+        });
+      }),
     });
   }
 
@@ -220,8 +225,11 @@ export class Story extends AggregateRoot {
     if (text.length > MAX_TEXT_LENGTH) throw new Error(`Text cannot exceed ${MAX_TEXT_LENGTH} characters`);
   }
 
-  toJSON(): StoryProps {
-    return { ...this.props, pages: [...this.props.pages] };
+  toJSON(): StoryProps & { pages: StoryPageProps[] } {
+    return {
+      ...this.props,
+      pages: this.props.pages.map((p) => p.toJSON()),
+    } as unknown as StoryProps & { pages: StoryPageProps[] };
   }
 
   get organizationId() { return this.props.organizationId; }

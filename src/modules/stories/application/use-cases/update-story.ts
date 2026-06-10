@@ -6,15 +6,22 @@ import { assertTenant } from "@/shared/tenant/guards";
 import type { StoryRepository } from "@/modules/stories/domain/repositories/story-repository";
 import type { AuditLogger } from "@/modules/audit/domain/audit-logger";
 import { StoryPage } from "@/modules/stories/domain/value-objects/story-page";
+import { PagePictogram } from "@/modules/stories/domain/value-objects/page-pictogram";
 import { parseInput, sanitizeText } from "@/core/validation/parse";
+
+const pagePictogramSchema = z.object({
+  id: z.string().min(1),
+  order: z.number().int().min(0),
+  pictogramUrl: z.string(),
+  pictogramKeyword: z.string().nullable().optional(),
+  pictogramId: z.string().nullable().optional(),
+});
 
 const pageSchema = z.object({
   id: z.string().min(1),
   order: z.number().int().min(0),
   text: z.string().max(2000),
-  pictogramUrl: z.string().url().nullable().optional(),
-  pictogramKeyword: z.string().nullable().optional(),
-  pictogramId: z.string().nullable().optional(),
+  pictograms: z.array(pagePictogramSchema).default([]),
   backgroundColor: z.string().regex(/^#?[0-9a-fA-F]{3,8}$/).nullable().optional(),
   textColor: z.string().regex(/^#?[0-9a-fA-F]{3,8}$/).nullable().optional(),
   fontSize: z.number().int().min(8).max(96).nullable().optional(),
@@ -63,9 +70,15 @@ export class UpdateStoryUseCase {
           id: p.id,
           order: p.order,
           text: sanitizeText(p.text, 2000),
-          pictogramUrl: p.pictogramUrl ?? null,
-          pictogramKeyword: p.pictogramKeyword ?? null,
-          pictogramId: p.pictogramId ?? null,
+          pictograms: (p.pictograms ?? []).map((pic) =>
+            PagePictogram.create({
+              id: pic.id,
+              order: pic.order,
+              pictogramUrl: pic.pictogramUrl,
+              pictogramKeyword: pic.pictogramKeyword ?? null,
+              pictogramId: pic.pictogramId ?? null,
+            }),
+          ),
           backgroundColor: p.backgroundColor ?? null,
           textColor: p.textColor ?? null,
           fontSize: p.fontSize ?? null,

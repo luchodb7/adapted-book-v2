@@ -11,6 +11,7 @@ export interface ListStoriesQuery {
   offset?: number;
   sortBy?: "createdAt" | "updatedAt" | "title";
   sortDir?: "asc" | "desc";
+  loadPages?: boolean;
 }
 
 export interface ListStoriesResult {

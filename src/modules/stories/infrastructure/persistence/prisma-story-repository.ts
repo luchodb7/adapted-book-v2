@@ -6,8 +6,10 @@ import {
 } from "@/modules/stories/domain/repositories/story-repository";
 import { Story } from "@/modules/stories/domain/entities/story";
 import { StoryPage } from "@/modules/stories/domain/value-objects/story-page";
+import { PagePictogram } from "@/modules/stories/domain/value-objects/page-pictogram";
 
-type StoryRow = Prisma.StoryGetPayload<{ include: { pages: true } }>;
+type StoryRowWithPages = Prisma.StoryGetPayload<{ include: { pages: { include: { pictograms: true } } } }>;
+type StoryRowWithPagesNoPictograms = Prisma.StoryGetPayload<{ include: { pages: true } }>;
 
 export class PrismaStoryRepository implements StoryRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -15,9 +17,9 @@ export class PrismaStoryRepository implements StoryRepository {
   async findById(id: string, organizationId: string): Promise<Story | null> {
     const row = await this.prisma.story.findFirst({
       where: { id, organizationId, deletedAt: null },
-      include: { pages: { orderBy: { order: "asc" } } },
+      include: { pages: { orderBy: { order: "asc" }, include: { pictograms: { orderBy: { order: "asc" } } } } },
     });
-    return row ? this.toDomain(row) : null;
+    return row ? this.toDomain(row as StoryRowWithPages) : null;
   }
 
   async list(query: ListStoriesQuery): Promise<ListStoriesResult> {
@@ -41,23 +43,58 @@ export class PrismaStoryRepository implements StoryRepository {
       [query.sortBy ?? "updatedAt"]: query.sortDir ?? "desc",
     };
 
+    const includePages: Prisma.StoryInclude = query.loadPages !== false
+      ? { pages: { orderBy: { order: "asc" as const }, include: { pictograms: { orderBy: { order: "asc" as const } } } } }
+      : { pages: { orderBy: { order: "asc" as const } } };
+
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.story.findMany({
         where,
-        include: { pages: { orderBy: { order: "asc" } } },
         orderBy,
         take: query.limit ?? 24,
         skip: query.offset ?? 0,
+        include: includePages,
       }),
       this.prisma.story.count({ where }),
     ]);
 
-    return { items: rows.map((r) => this.toDomain(r)), total };
+    return { items: rows.map((r) => this.toDomain(r as unknown as StoryRowWithPages)), total };
   }
 
   async save(story: Story): Promise<void> {
-    const data = story.toJSON();
-    const pages = data.pages.map((p) => p.toJSON());
+    const data = story.toJSON() as unknown as {
+      id: string;
+      organizationId: string;
+      createdById: string;
+      title: string;
+      description: string | null;
+      originalText: string;
+      adaptedText: string | null;
+      language: string;
+      status: string;
+      visibility: string;
+      coverImageUrl: string | null;
+      tags: string[];
+      metadata: Record<string, unknown>;
+      deletedAt: Date | null;
+      pages: Array<{
+        id: string;
+        order: number;
+        text: string;
+        pictograms: Array<{
+          id: string;
+          order: number;
+          pictogramUrl: string;
+          pictogramKeyword: string | null;
+          pictogramId: string | null;
+        }>;
+        backgroundColor: string | null;
+        textColor: string | null;
+        fontSize: number | null;
+        layout: string;
+        notes: string | null;
+      }>;
+    };
 
     await this.prisma.$transaction(async (tx) => {
       await tx.story.upsert({
@@ -71,8 +108,8 @@ export class PrismaStoryRepository implements StoryRepository {
           originalText: data.originalText,
           adaptedText: data.adaptedText,
           language: data.language,
-          status: data.status,
-          visibility: data.visibility,
+          status: data.status as Prisma.StoryCreateInput["status"],
+          visibility: data.visibility as Prisma.StoryCreateInput["visibility"],
           coverImageUrl: data.coverImageUrl,
           tags: data.tags,
           metadata: data.metadata as object,
@@ -83,8 +120,8 @@ export class PrismaStoryRepository implements StoryRepository {
           originalText: data.originalText,
           adaptedText: data.adaptedText,
           language: data.language,
-          status: data.status,
-          visibility: data.visibility,
+          status: data.status as Prisma.StoryUpdateInput["status"],
+          visibility: data.visibility as Prisma.StoryUpdateInput["visibility"],
           coverImageUrl: data.coverImageUrl,
           tags: data.tags,
           metadata: data.metadata as object,
@@ -92,26 +129,33 @@ export class PrismaStoryRepository implements StoryRepository {
         },
       });
 
-      // Replace pages atomically. For huge stories (>200 pages) a per-page
-      // diff would be cheaper; we keep it simple while we're well under that.
+      await tx.storyPagePictogram.deleteMany({ where: { page: { storyId: data.id } } });
       await tx.storyPage.deleteMany({ where: { storyId: data.id } });
-      if (pages.length > 0) {
-        await tx.storyPage.createMany({
-          data: pages.map((p) => ({
-            id: p.id,
-            storyId: data.id,
-            order: p.order,
-            text: p.text,
-            pictogramUrl: p.pictogramUrl,
-            pictogramKeyword: p.pictogramKeyword,
-            pictogramId: p.pictogramId,
-            backgroundColor: p.backgroundColor,
-            textColor: p.textColor,
-            fontSize: p.fontSize,
-            layout: p.layout,
-            notes: p.notes,
-          })),
-        });
+      if (data.pages.length > 0) {
+        for (const p of data.pages) {
+          await tx.storyPage.create({
+            data: {
+              id: p.id,
+              storyId: data.id,
+              order: p.order,
+              text: p.text,
+              backgroundColor: p.backgroundColor,
+              textColor: p.textColor,
+              fontSize: p.fontSize,
+              layout: p.layout,
+              notes: p.notes,
+              pictograms: {
+                create: p.pictograms.map((pic) => ({
+                  id: pic.id,
+                  order: pic.order,
+                  pictogramUrl: pic.pictogramUrl,
+                  pictogramKeyword: pic.pictogramKeyword,
+                  pictogramId: pic.pictogramId,
+                })),
+              },
+            },
+          });
+        }
       }
     });
   }
@@ -123,7 +167,7 @@ export class PrismaStoryRepository implements StoryRepository {
     });
   }
 
-  private toDomain(row: StoryRow): Story {
+  private toDomain(row: StoryRowWithPages | StoryRowWithPagesNoPictograms): Story {
     return Story.fromPersistence({
       id: row.id,
       organizationId: row.organizationId,
@@ -138,21 +182,30 @@ export class PrismaStoryRepository implements StoryRepository {
       coverImageUrl: row.coverImageUrl,
       tags: row.tags,
       metadata: (row.metadata as Record<string, unknown>) ?? {},
-      pages: row.pages.map((p) =>
-        StoryPage.create({
+      pages: row.pages.map((p) => {
+        const pagePictograms = "pictograms" in p && Array.isArray(p.pictograms)
+          ? (p.pictograms as Array<{ id: string; order: number; pictogramUrl: string; pictogramKeyword: string | null; pictogramId: string | null }>)
+          : [];
+        return StoryPage.create({
           id: p.id,
           order: p.order,
           text: p.text,
-          pictogramUrl: p.pictogramUrl,
-          pictogramKeyword: p.pictogramKeyword,
-          pictogramId: p.pictogramId,
+          pictograms: pagePictograms.map((pic) =>
+            PagePictogram.create({
+              id: pic.id,
+              order: pic.order,
+              pictogramUrl: pic.pictogramUrl,
+              pictogramKeyword: pic.pictogramKeyword,
+              pictogramId: pic.pictogramId,
+            }),
+          ),
           backgroundColor: p.backgroundColor,
           textColor: p.textColor,
           fontSize: p.fontSize,
           layout: p.layout as Parameters<typeof StoryPage.create>[0]["layout"],
           notes: p.notes,
-        }),
-      ),
+        });
+      }),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       deletedAt: row.deletedAt,

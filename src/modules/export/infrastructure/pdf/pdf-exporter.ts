@@ -53,30 +53,38 @@ export class PDFExporter {
       const pdfPage = pdf.addPage([w, h]);
       pdfPage.drawRectangle({ x: 0, y: 0, width: w, height: h, color: colors.bg });
 
-      const hasImage = !!page.pictogramUrl;
-      let imageBox = hasImage ? Math.min(w, h) * 0.55 : 0;
-      let imageX = (w - imageBox) / 2;
-      let imageY = h - margin - imageBox;
+      const pictograms = page.pictograms.filter((p) => p.pictogramUrl);
+      const hasImages = pictograms.length > 0;
+      const totalImageArea = hasImages ? Math.min(w, h) * 0.45 : 0;
+      const imageSpacing = 8;
+      const imgCount = pictograms.length;
 
-      if (hasImage && page.pictogramUrl) {
-        try {
-          const imgBytes = await fetchAsBytes(page.pictogramUrl);
-          const img = await embedImage(pdf, imgBytes, page.pictogramUrl);
-          if (img) {
-            const scale = imageBox / Math.max(img.width, img.height);
-            const drawW = img.width * scale;
-            const drawH = img.height * scale;
-            imageX = (w - drawW) / 2;
-            imageY = h - margin - drawH;
-            pdfPage.drawImage(img, { x: imageX, y: imageY, width: drawW, height: drawH });
-            imageBox = drawH;
+      if (hasImages) {
+        const imgW = Math.min((w - margin * 2 - imageSpacing * (imgCount - 1)) / imgCount, 160);
+        const imgH = totalImageArea;
+        const totalW = imgW * imgCount + imageSpacing * (imgCount - 1);
+        const startX = (w - totalW) / 2;
+
+        for (let pi = 0; pi < imgCount; pi++) {
+          const pic = pictograms[pi]!;
+          try {
+            const imgBytes = await fetchAsBytes(pic.pictogramUrl);
+            const img = await embedImage(pdf, imgBytes, pic.pictogramUrl);
+            if (img) {
+              const scale = Math.min(imgW / img.width, imgH / img.height);
+              const drawW = img.width * scale;
+              const drawH = img.height * scale;
+              const drawX = startX + pi * (imgW + imageSpacing) + (imgW - drawW) / 2;
+              const drawY = h - margin - imgH + (imgH - drawH) / 2;
+              pdfPage.drawImage(img, { x: drawX, y: drawY, width: drawW, height: drawH });
+            }
+          } catch {
+            // skip broken image
           }
-        } catch {
-          imageBox = 0;
         }
       }
 
-      const textTop = (hasImage && imageBox > 0 ? imageY : h - margin) - 24;
+      const textTop = (hasImages ? h - margin - totalImageArea : h - margin) - 32;
       drawWrappedText(pdfPage, page.text, {
         x: margin,
         y: textTop,

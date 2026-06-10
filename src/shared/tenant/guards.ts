@@ -38,6 +38,20 @@ export async function requireTenantContext(): Promise<TenantContext> {
     throw new ForbiddenError("You don't belong to any organization");
   }
 
+  const headerStore = await headers();
+
+  if (session.user.role) {
+    return {
+      userId: session.user.id,
+      organizationId,
+      role: session.user.role as TenantContext["role"],
+      email: session.user.email,
+      locale: session.user.locale ?? "en",
+      ipAddress: headerStore.get("x-forwarded-for") ?? undefined,
+      userAgent: headerStore.get("user-agent") ?? undefined,
+    };
+  }
+
   const membership = await prisma.membership.findFirst({
     where: {
       userId: session.user.id,
@@ -45,14 +59,18 @@ export async function requireTenantContext(): Promise<TenantContext> {
       status: "ACTIVE",
       deletedAt: null,
     },
-    include: { organization: true, user: true },
+    select: {
+      userId: true,
+      organizationId: true,
+      role: true,
+      user: { select: { email: true, locale: true } },
+      organization: { select: { deletedAt: true } },
+    },
   });
 
   if (!membership || membership.organization.deletedAt) {
     throw new ForbiddenError("Active membership not found for this organization");
   }
-
-  const headerStore = await headers();
 
   return {
     userId: membership.userId,

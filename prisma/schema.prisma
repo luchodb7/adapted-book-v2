@@ -245,6 +245,8 @@ model Membership {
   @@unique([userId, organizationId])
   @@index([organizationId])
   @@index([userId])
+  @@index([userId, status, deletedAt])
+  @@index([userId, organizationId, status, deletedAt])
   @@map("memberships")
 }
 
@@ -302,6 +304,9 @@ model Story {
 
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
+  @@index([organizationId, updatedAt])
+  @@index([organizationId, deletedAt])
+  @@index([organizationId, createdById])
   @@index([createdById])
   @@index([deletedAt])
   @@unique([organizationId, slug])
@@ -309,27 +314,39 @@ model Story {
 }
 
 model StoryPage {
-  id                String  @id @default(cuid())
-  storyId           String
-  order             Int
-  text              String  @db.Text
-  pictogramUrl      String?
-  pictogramKeyword  String?
-  pictogramId       String?
-  backgroundColor   String?
-  textColor         String?
-  fontSize          Int?
-  layout            String  @default("text-top")
-  notes             String?
+  id              String  @id @default(cuid())
+  storyId         String
+  order           Int
+  text            String  @db.Text
+  backgroundColor String?
+  textColor       String?
+  fontSize        Int?
+  layout          String  @default("text-top")
+  notes           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  story     Story              @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  pictograms StoryPagePictogram[]
 
   @@unique([storyId, order])
-  @@index([storyId])
+  @@index([storyId, order])
   @@map("story_pages")
+}
+
+model StoryPagePictogram {
+  id              String  @id @default(cuid())
+  pageId          String
+  order           Int
+  pictogramUrl    String
+  pictogramKeyword String?
+  pictogramId     String?
+
+  page StoryPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, order])
+  @@map("story_page_pictograms")
 }
 
 model StoryExport {
