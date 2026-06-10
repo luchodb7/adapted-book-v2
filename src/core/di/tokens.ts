@@ -41,5 +41,5 @@ import type { AuditLogger } from "@/modules/audit/domain/audit-logger";
 export const AuditLoggerToken = createToken<AuditLogger>("AuditLogger");
 
 // ---------- Export ----------
-import type { StoryExportService } from "@/modules/export/domain/story-export-service";
-export const StoryExportServiceToken = createToken<StoryExportService>("StoryExportService");
+import type { IStoryExportService } from "@/modules/export/domain/story-export-service";
+export const StoryExportServiceToken = createToken<IStoryExportService>("StoryExportService");

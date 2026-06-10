@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib";
+import type { PDFFont, PDFPage, PDFImage } from "pdf-lib";
 import type { Story } from "@/modules/stories/domain/entities/story";
 import type { ExportArtifact, ExportOptions } from "@/modules/export/domain/story-export-service";
 
@@ -112,13 +113,13 @@ interface DrawOptions {
   x: number;
   y: number;
   maxWidth: number;
-  font: import("pdf-lib").PDFFont;
+  font: PDFFont;
   size: number;
   color: ReturnType<typeof rgb>;
   lineHeight?: number;
 }
 
-function drawWrappedText(page: import("pdf-lib").PDFPage, text: string, opts: DrawOptions): void {
+function drawWrappedText(page: PDFPage, text: string, opts: DrawOptions): void {
   const words = text.split(/\s+/);
   const lines: string[] = [];
   let current = "";
@@ -157,7 +158,7 @@ async function embedImage(
   pdf: PDFDocument,
   bytes: Uint8Array,
   url: string,
-): Promise<import("pdf-lib").PDFImage | null> {
+): Promise<PDFImage | null> {
   const lower = url.toLowerCase();
   try {
     if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return pdf.embedJpg(bytes);

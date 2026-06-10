@@ -38,7 +38,7 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
   AZURE_OPENAI_API_KEY: z.string().optional(),
-  AZURE_OPENAI_ENDPOINT: z.string().url().optional(),
+  AZURE_OPENAI_ENDPOINT: z.string().url().optional().or(z.literal("")),
   AZURE_OPENAI_DEPLOYMENT: z.string().optional(),
   AZURE_OPENAI_API_VERSION: z.string().optional(),
   OLLAMA_BASE_URL: z.string().url().optional(),

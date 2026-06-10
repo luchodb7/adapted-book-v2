@@ -18,7 +18,7 @@ interface Registration<T> {
 }
 
 export function createToken<T>(description: string): Token<T> {
-  return Symbol(description) as Token<T>;
+  return Symbol.for(description) as Token<T>;
 }
 
 export class Container {

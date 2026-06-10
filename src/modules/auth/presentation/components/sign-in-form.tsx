@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ function SubmitButton() {
 }
 
 export function SignInForm() {
-  const [state, action] = useFormState(signInAction, idleResult());
+  const [state, action] = useActionState(signInAction, idleResult());
 
   return (
     <form action={action} className="space-y-4" aria-describedby={state.message ? "form-error" : undefined}>

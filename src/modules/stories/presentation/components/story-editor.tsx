@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { nanoid } from "nanoid";
-import { ArrowDown, ArrowUp, FileDown, Image, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, FileDown, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -188,7 +188,7 @@ export function StoryEditor({ storyId, initialTitle, initialPages, initialStatus
           <h2 id="pages-panel" className="border-b px-3 py-2 text-sm font-semibold">
             Pages
           </h2>
-          <ul className="flex-1 space-y-1 overflow-y-auto p-2" role="list">
+          <ul className="flex-1 space-y-1 overflow-y-auto p-2">
             {pages.map((p, i) => (
               <li key={p.id}>
                 <div

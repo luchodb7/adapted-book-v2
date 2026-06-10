@@ -37,7 +37,7 @@ async function upsertPlan() {
       priceMonthlyUsd: 0,
       priceYearlyUsd: 0,
       isActive: true,
-      features: ["social_stories", "arasaac_pictograms", "pdf_export", "zip_export"],
+      features: { social_stories: true, arasaac_pictograms: true, pdf_export: true, zip_export: true },
       limits: {
         maxStories: 10,
         maxMembers: 3,
@@ -56,13 +56,9 @@ async function upsertOrganization() {
     create: {
       name: ORG_NAME,
       slug: ORG_SLUG,
-      status: "ACTIVE",
-      settings: {
-        locale: "en",
-        theme: "system",
-        highContrast: false,
-        textSize: "default",
-      },
+      locale: "en",
+      timezone: "UTC",
+      settings: { locale: "en", theme: "system", highContrast: false, textSize: "default" },
     },
   });
 }
@@ -76,14 +72,14 @@ async function upsertUser(email: string, name: string) {
       email,
       name,
       emailVerified: new Date(),
-      passwordHash,
-      accounts: {
-        create: {
-          type: "credentials",
-          provider: "credentials",
-          providerAccountId: email,
-        },
-      },
+          hashedPassword: passwordHash,
+          accounts: {
+            create: {
+              type: "credentials",
+              provider: "credentials",
+              providerAccountId: email,
+            },
+          },
     },
   });
 }
@@ -114,7 +110,6 @@ type SampleStory = {
   slug: string;
   title: string;
   language: string;
-  targetAge: number;
   status: "DRAFT" | "PUBLISHED";
   text: string;
   pages: { text: string; pictogramId: number | null; pictogramKeyword: string | null }[];
@@ -125,7 +120,6 @@ const SAMPLE_STORIES: SampleStory[] = [
     slug: "going-to-the-dentist",
     title: "Going to the Dentist",
     language: "en",
-    targetAge: 6,
     status: "PUBLISHED",
     text: "I am going to the dentist. The dentist is friendly. I will sit in the chair. The dentist will look at my teeth. I will be brave. I will get a sticker.",
     pages: [
@@ -141,7 +135,7 @@ const SAMPLE_STORIES: SampleStory[] = [
     slug: "sharing-toys-at-school",
     title: "Sharing Toys at School",
     language: "en",
-    targetAge: 5,
+
     status: "PUBLISHED",
     text: "I am at school with my friends. We have lots of toys. Sometimes I want a toy my friend has. I can ask nicely. My friend can say yes or no. We can take turns. Sharing makes us happy.",
     pages: [
@@ -156,7 +150,7 @@ const SAMPLE_STORIES: SampleStory[] = [
     slug: "washing-my-hands",
     title: "Washing My Hands",
     language: "en",
-    targetAge: 4,
+
     status: "DRAFT",
     text: "My hands can get dirty. I will wash them. I turn on the tap. I use soap. I rub my hands. I rinse. I dry. My hands are clean.",
     pages: [
@@ -185,10 +179,9 @@ async function upsertSampleStory(organizationId: string, createdById: string, s:
       originalText: s.text,
       adaptedText: s.text,
       language: s.language,
-      targetAge: s.targetAge,
       visibility: "ORGANIZATION",
       status: s.status,
-      publishedAt: s.status === "PUBLISHED" ? new Date() : null,
+
       pages: {
         create: s.pages.map((p, i) => ({
           order: i,

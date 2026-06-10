@@ -1,13 +1,14 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createStoryAction } from "@/modules/stories/presentation/server-actions/story-actions";
-import { idleResult } from "@/shared/auth/action-result";
+import type { ActionResult } from "@/shared/auth/action-result";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -19,7 +20,10 @@ function SubmitButton() {
 }
 
 export function CreateStoryForm() {
-  const [state, action] = useFormState(createStoryAction, idleResult());
+  const [state, action] = useActionState<ActionResult<{ storyId: string }>, FormData>(
+    createStoryAction,
+    { status: "idle" },
+  );
 
   return (
     <form action={action} className="space-y-6" aria-describedby={state.message ? "form-msg" : undefined}>

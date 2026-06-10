@@ -72,7 +72,7 @@ export async function GET(
       userAgent: ctx.userAgent,
     });
 
-    return new NextResponse(artifact.bytes, {
+    return new NextResponse(new Uint8Array(artifact.bytes), {
       status: 200,
       headers: {
         "Content-Type": artifact.mimeType,

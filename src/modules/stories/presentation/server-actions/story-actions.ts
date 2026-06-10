@@ -27,7 +27,7 @@ export async function createStoryAction(
   try {
     const ctx = await requireRole("EDITOR");
     const limit = await rateLimit({ key: `stories.create:${ctx.organizationId}`, kind: "default" });
-    if (!limit.allowed) return errorResult("Too many requests, please slow down.");
+    if (!limit.allowed) return errorResult("Too many requests, please slow down.") as unknown as ActionResult<{ storyId: string }>;
 
     const c = getContainer();
     const useCase = new CreateStoryUseCase(
@@ -49,7 +49,7 @@ export async function createStoryAction(
     if ((error as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw error;
     const app = toAppError(error);
     log.error({ err: error }, "createStoryAction.failed");
-    return errorResult(app.message, app.details?.fieldErrors as Record<string, string[]> | undefined);
+    return errorResult(app.message, app.details?.fieldErrors as Record<string, string[]> | undefined) as unknown as ActionResult<{ storyId: string }>;
   }
 }
 
@@ -103,6 +103,6 @@ export async function duplicateStoryAction(storyId: string): Promise<ActionResul
   } catch (error) {
     const app = toAppError(error);
     log.error({ err: error }, "duplicateStoryAction.failed");
-    return errorResult(app.message);
+    return errorResult(app.message) as unknown as ActionResult<{ storyId: string }>;
   }
 }

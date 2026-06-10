@@ -1,6 +1,6 @@
 import type { Logger } from "@/core/logger/logger";
 import type { PictogramService } from "@/modules/pictograms/domain/services/pictogram-service";
-import { Story } from "@/modules/stories/domain/entities/story";
+import type { Story } from "@/modules/stories/domain/entities/story";
 import {
   type GenerateSocialStoryInput,
   type GenerateSocialStoryOutput,

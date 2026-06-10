@@ -87,7 +87,18 @@ export default async function StoriesPage({ searchParams }: PageProps) {
         </Button>
       </form>
 
-      <StoriesTable items={result.items.map((s) => s.toJSON())} />
+      <StoriesTable
+        items={result.items.map((s) => {
+          const d = s.toJSON();
+          return {
+            id: d.id,
+            title: d.title,
+            status: d.status,
+            pages: d.pages.map((p) => p.toJSON()),
+            updatedAt: d.updatedAt,
+          };
+        })}
+      />
 
       {totalPages > 1 && (
         <nav aria-label="Pagination" className="flex items-center justify-between">
