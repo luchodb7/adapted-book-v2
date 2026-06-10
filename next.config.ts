@@ -35,7 +35,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  output: "standalone",
+  output: process.env.VERCEL ? undefined : "standalone",
   experimental: {
     serverActions: {
       bodySizeLimit: "5mb",

@@ -4,6 +4,7 @@
   "private": true,
   "description": "Adapted Books - Enterprise SaaS platform for creating accessible social stories, adapted books, and educational materials with ARASAAC pictograms and AI-ready architecture.",
   "license": "AGPL-3.0-or-later",
+  "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=20.11.0",
     "pnpm": ">=9.0.0"
